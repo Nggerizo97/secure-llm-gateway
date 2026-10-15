@@ -102,7 +102,7 @@ WSL terminal 2:
 bash deploy/model-server/evidence.sh start
 ```
 
-It prints a canary such as `CANARY-1a2b3c4d5e6f7a8b` and starts a packet capture. On Windows, send prompts containing it, enough to exhaust the budget so some reach machine B:
+It prints a canary such as `CANARY-1a2b3c4d5e6f7a8b` and starts a packet capture. On Windows, make sure the mock company provider from step 4 is still running and that you are in the PowerShell session configured by `use-wsl-model-server.ps1` (the `ask` output must start with `Primary: openai_compat | Fallback: ollama`). Then send prompts containing the canary, enough to exhaust the budget so some reach machine B:
 
 ```powershell
 python -m app.cli ask "Review this synthetic function. Reference CANARY-1a2b3c4d5e6f7a8b" --repeat 6

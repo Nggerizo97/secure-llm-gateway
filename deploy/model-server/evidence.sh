@@ -37,7 +37,9 @@ case "${1:-}" in
     ;;
   check)
     [[ -s "$CANARY_FILE" && -f "$MARKER" ]] || { echo "Run 'evidence.sh start' first" >&2; exit 1; }
-    CANARY="$(cat "$CANARY_FILE")"
+    # The canary is always read from $CANARY_FILE (grep -f), never passed as an argument:
+    # sudo logs every command line to auth.log and the journal, which would plant the canary
+    # in the very logs being searched.
     [[ -s "$PIDFILE" ]] && sudo kill -INT "$(cat "$PIDFILE")" 2>/dev/null || true
     rm -f "$PIDFILE"
     sleep 1
@@ -48,20 +50,21 @@ case "${1:-}" in
     packets="$(sudo tcpdump -r "$PCAP" 2>/dev/null | wc -l)"
     report "Gateway traffic was captured ($packets packets on eth0:8443)" "$([[ "$packets" -gt 0 ]] && echo ok)"
     report "Canary absent from captured traffic (TLS-encrypted on the wire)" \
-      "$(sudo grep -qaF -- "$CANARY" "$PCAP" && echo found || echo ok)"
+      "$(sudo grep -qaF -f "$CANARY_FILE" "$PCAP" && echo found || echo ok)"
 
     mapfile -t changed < <(sudo find / -xdev -type f -newer "$MARKER" \
       -not -path "$DIR/*" -not -path "$PCAP" -not -path '/proc/*' 2>/dev/null)
     hits=""
     if ((${#changed[@]})); then
-      hits="$(printf '%s\0' "${changed[@]}" | sudo xargs -0 grep -laF -- "$CANARY" 2>/dev/null || true)"
+      hits="$(printf '%s\0' "${changed[@]}" | sudo xargs -0 grep -laF -f "$CANARY_FILE" 2>/dev/null || true)"
     fi
     report "Canary absent from all ${#changed[@]} files changed on disk since start" "$([[ -z "$hits" ]] && echo ok)"
     [[ -n "$hits" ]] && echo "$hits" | sed 's/^/      found in: /'
 
     since="@$(date -r "$MARKER" +%s)"
-    report "Canary absent from the system journal (Ollama service logs)" \
-      "$(sudo journalctl --since "$since" --no-pager 2>/dev/null | grep -qF -- "$CANARY" && echo found || echo ok)"
+    journal_hits="$(sudo journalctl --since "$since" --no-pager 2>/dev/null | grep -aF -f "$CANARY_FILE" || true)"
+    report "Canary absent from the system journal (Ollama service logs)" "$([[ -z "$journal_hits" ]] && echo ok)"
+    [[ -n "$journal_hits" ]] && echo "$journal_hits" | cut -c1-200 | sed 's/^/      line: /'
 
     echo
     echo "Files changed since start (for transparency):"
