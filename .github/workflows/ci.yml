@@ -1,0 +1,26 @@
+name: Mock-Only Security & Routing CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  test-mock-profile:
+    runs-on: ubuntu-latest
+    env:
+      APP_PROFILE: mock
+      ENABLE_RAG: "false"
+      ENABLE_FLOCI: "false"
+      AUDIT_STORE: memory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install core and dev dependencies only
+        run: python -m pip install -e ".[dev]"
+      - name: Run offline unit and policy tests
+        run: python -m pytest -v
+      - name: Verify CLI mock demo
+        run: python -m app.cli demo --provider mock
