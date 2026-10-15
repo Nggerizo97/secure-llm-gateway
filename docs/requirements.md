@@ -28,7 +28,7 @@ The machine that runs the fallback model necessarily processes the prompts. The 
 
 ## Requirements
 
-Status: ✅ done and tested · 🟡 partly done · ⬜ to do
+Status: ✅ done and tested · 🟡 implemented, not yet run on the target machine (WSL) · ⬜ to do
 
 ### Functional
 
@@ -37,31 +37,33 @@ Status: ✅ done and tested · 🟡 partly done · ⬜ to do
 | R1 | Call a real primary LLM through an OpenAI-compatible API using a configured key and model | ✅ | `app/providers/openai_compat.py`; `test_external_provider_success_sends_key_and_configured_model` |
 | R2 | A real upstream HTTP 429 (rate limit) triggers fallback to the configured route | ✅ | `test_real_http_429_falls_back_to_remote_model` |
 | R3 | Budget exhaustion (HTTP 402 / 429 `insufficient_quota`) falls back **only** when `FALLBACK_ON_QUOTA_EXHAUSTED=true` (approved alternative budget) | ✅ | `test_quota_exhausted_*` |
-| R4 | Fallback can target a self-hosted model on another machine | 🟡 | Gateway side done (`OllamaProvider` remote mode); machine B setup is S7–S8 |
+| R4 | Fallback can target a self-hosted model on another machine | ✅ | Run on WSL (2026-10-15): mock company provider hit its budget, returned 429, and requests 5–6 were answered by `qwen2.5-coder:1.5b` on WSL over verified TLS + token |
 | R5 | Auth errors, other 4xx (e.g. content policy) and malformed responses never reroute | ✅ | `test_non_capacity_errors_never_reroute` |
 | R6 | Routes and request IDs are server-controlled; callers cannot choose providers | ✅ | `tests/test_request_integrity.py` |
 | R7 | Developer tools can use the gateway via an OpenAI-compatible `/v1/chat/completions` endpoint | ⬜ | — |
+| R8 | A stand-in company provider returns a real HTTP 429 when its token budget runs out (no paid key needed) | ✅ | `mock_provider/service.py`; `tests/test_mock_company_provider.py` |
+| R9 | Operators can send real prompts along the configured route and watch the failover | ✅ | `python -m app.cli ask "..." --repeat N` |
 
 ### Security
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | S1 | Self-hosted model endpoints must resolve to loopback, private or tunnel (100.64.0.0/10) addresses; public, unspecified and link-local addresses are denied, including via DNS | ✅ | `app/network_policy.py`; `test_remote_ollama_*` |
-| S2 | Remote model calls require a bearer token, and HTTPS unless the operator confirms an encrypted tunnel (`OLLAMA_ALLOW_PLAINTEXT_TUNNEL`) | 🟡 | Client side tested; the proxy on machine B that **checks** the token is S7 |
+| S2 | Remote model calls require a bearer token, and HTTPS unless the operator confirms an encrypted tunnel (`OLLAMA_ALLOW_PLAINTEXT_TUNNEL`) | ✅ | Client side tested; server-side enforcement is S7 |
 | S3 | External API endpoints must use HTTPS (plain HTTP only for loopback) | ✅ | `test_external_provider_fails_closed_when_misconfigured` |
 | S4 | Keys come from environment / secret store, are held as `SecretStr`, and never appear in logs, audit or error messages; upstream error bodies are not echoed | ✅ | `test_api_keys_never_appear_*`, `test_upstream_error_body_is_not_echoed` |
 | S5 | Audit log is metadata-only and insert-only | ✅ | `test_no_prompt_logging`, `test_request_ids_are_server_generated_and_audit_is_insert_only` |
 | S6 | Callers must authenticate to the gateway API | ⬜ | — |
-| S7 | Machine B: reverse proxy enforces the token and TLS; Ollama binds only to localhost behind it; no debug/prompt logging | ⬜ | — |
-| S8 | Machine B firewall accepts model traffic only from machine A over the tunnel | ⬜ | — |
+| S7 | Machine B: reverse proxy enforces the token and TLS and exposes only `POST /api/generate` over TCP; Ollama binds only to localhost behind it; no debug/prompt logging; the token is never written to Caddy's config autosave | ✅ | `verify.sh` 9/9 PASS on WSL (2026-10-15); `deploy/model-server/Caddyfile`, `setup.sh`, `start-proxy.sh` |
+| S8 | Machine B firewall accepts model traffic only from machine A; optional lockdown blocks all outbound connections | 🟡 | `deploy/model-server/firewall.sh secure` / `lockdown` |
 
 ### Evidence for reviewers
 
 | ID | Requirement | Status |
 |---|---|---|
-| E1 | Step-by-step two-machine demo guide | ⬜ |
-| E2 | Packet capture showing only encrypted traffic between A and B's tunnel address | ⬜ |
-| E3 | Before/after file snapshot of machine B showing no prompts persisted | ⬜ |
+| E1 | Step-by-step two-machine demo guide | ✅ [two-machine-demo.md](two-machine-demo.md) |
+| E2 | Packet capture showing a canary from the prompt is absent from traffic to machine B (TLS) | 🟡 `evidence.sh` |
+| E3 | Canary search of every file changed on machine B and its system journal shows no prompts persisted | 🟡 `evidence.sh` |
 | E4 | All tests run offline (no network, model server or real key) | ✅ |
 | E5 | Synthetic sample code only | ✅ |
 
@@ -84,6 +86,5 @@ OLLAMA_API_KEY=<proxy token; never committed>
 
 ## Next steps
 
-1. **S7, S8, E1:** machine B setup (proxy config, firewall, Ollama settings) and the two-machine guide.
+1. **Run [two-machine-demo.md](two-machine-demo.md) on WSL** to turn the 🟡 items into ✅ (setup needs your `sudo`).
 2. **R7, S6:** OpenAI-compatible endpoint with caller authentication, so real developer tools can use the gateway.
-3. **E2, E3:** evidence kit (capture and snapshot scripts).

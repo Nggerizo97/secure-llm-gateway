@@ -78,6 +78,34 @@ def run_demo(provider: str) -> None:
         )
 
 
+def run_ask(prompt: str, repeat: int) -> int:
+    """Send real prompts along the server-configured route (no fault simulation)."""
+    router = build_router()
+    settings = router.settings
+    print(
+        f"=== Route (Profile: {settings.app_profile} | Primary: {settings.primary_provider} "
+        f"| Fallback: {settings.fallback_provider}) ==="
+    )
+    failures = 0
+    for attempt in range(1, repeat + 1):
+        try:
+            res = router.route(LLMRequest(prompt=prompt))
+        except GatewayError as err:
+            failures += 1
+            print(
+                f"\n[{attempt}] BLOCKED req_id={err.request_id} | status={err.status_code} "
+                f"| category={err.category} | {err}"
+            )
+            continue
+        route = f"FALLBACK ({res.fallback_reason})" if res.fallback_used else "PRIMARY"
+        print(
+            f"\n[{attempt}] {route} provider={res.selected_provider} | model={res.model} "
+            f"| latency={res.latency_ms}ms | req_id={res.request_id}"
+        )
+        print(f"    Output: {res.content[:200]}")
+    return 1 if failures else 0
+
+
 def run_audit_report() -> None:
     router = build_router()
     metrics = router.audit.compute_metrics()
@@ -105,6 +133,10 @@ def main() -> None:
     demo_parser = subparsers.add_parser("demo", help="Run reproducible routing demo")
     demo_parser.add_argument("--provider", default="mock", help="Primary provider name (mock or ollama)")
 
+    ask_parser = subparsers.add_parser("ask", help="Send a prompt along the configured route (no simulation)")
+    ask_parser.add_argument("prompt", help="Synthetic prompt text")
+    ask_parser.add_argument("--repeat", type=int, default=1, help="Send the prompt N times (e.g. to exhaust a budget)")
+
     subparsers.add_parser("audit-report", help="Print Section 13 audit metrics summary")
 
     rag_parser = subparsers.add_parser("rag-demo", help="Run optional ChromaDB retrieval demo")
@@ -115,6 +147,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "demo":
         run_demo(args.provider)
+    elif args.command == "ask":
+        raise SystemExit(run_ask(args.prompt, args.repeat))
     elif args.command == "audit-report":
         run_audit_report()
     elif args.command == "rag-demo":
