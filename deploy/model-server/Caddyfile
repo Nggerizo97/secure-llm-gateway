@@ -1,0 +1,39 @@
+# Reverse proxy in front of Ollama on the model server (WSL / "machine B").
+# Only POST /api/generate carrying the correct bearer token is forwarded; everything else gets 403,
+# so Ollama's admin endpoints (pull, delete, create, ...) are unreachable from the network.
+# Started by start-proxy.sh, which sets MODEL_SERVER_IP and MODEL_PROXY_TOKEN.
+{
+	admin off
+	skip_install_trust
+	auto_https disable_redirects
+	servers {
+		# TCP only (HTTP/1.1 and HTTP/2); no HTTP/3 UDP listener
+		protocols h1 h2
+	}
+}
+
+https://{$MODEL_SERVER_IP}:8443 {
+	bind {$MODEL_SERVER_IP}
+	tls internal
+
+	request_body {
+		max_size 1MB
+	}
+
+	@allowed {
+		method POST
+		path /api/generate
+		header Authorization "Bearer {$MODEL_PROXY_TOKEN}"
+	}
+
+	handle @allowed {
+		reverse_proxy 127.0.0.1:11434 {
+			header_up Host 127.0.0.1:11434
+			header_up -Authorization
+		}
+	}
+
+	handle {
+		respond 403
+	}
+}

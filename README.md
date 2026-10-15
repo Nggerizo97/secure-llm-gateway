@@ -45,6 +45,8 @@ On macOS/Linux activate with `source .venv/bin/activate` instead.
 | Command | What it does |
 |---|---|
 | `python -m app.cli demo --provider mock` | Primary success, simulated 429 → fallback, fallback failure, 401 with no fallback, then the audit trail. |
+| `python -m app.cli ask "prompt" --repeat N` | Sends real prompts along the configured route (no simulation) and shows primary vs fallback per request. |
+| `python -m mock_provider.service` | Stand-in company provider (OpenAI-compatible) that returns a real 429 when its token budget runs out. |
 | `python -m app.cli audit-report` | Success metrics from the audit database (plan §13). |
 | `python -m app.cli rag-demo` | Retrieval over `sample_project/` (needs `ENABLE_RAG=true` and `.[local]`). |
 | `python -m app.cli floci-demo` | Exports one synthetic audit event to a local Floci S3 emulator (`local` profile, `ENABLE_FLOCI=true`). |
@@ -107,6 +109,7 @@ data/           local audit DB / vector store / Floci state (ignored by Git)
 ## Further reading
 
 - [Demo requirements and status](docs/requirements.md)
+- [Two-machine demo: Windows gateway + WSL model server](docs/two-machine-demo.md)
 - [Demo script](docs/demo-script.md)
 - [Architecture](docs/architecture.md)
 - [Threat model](docs/threat-model.md)
