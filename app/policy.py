@@ -5,7 +5,7 @@ from app.schemas import LLMRequest
 
 ALLOWED_PROVIDERS_BY_PROFILE: dict[str, set[str]] = {
     "mock": {"mock", "mock_fallback"},
-    "local": {"mock", "mock_fallback", "ollama"},
+    "local": {"mock", "mock_fallback", "ollama", "openai_compat"},
     "enterprise": set(),
 }
 
@@ -75,6 +75,8 @@ class PolicyEngine:
         allowed_models = set(ALLOWED_MODELS_BY_PROFILE.get(self.settings.app_profile, set()))
         if self.settings.app_profile == "local":
             allowed_models.add(self.settings.ollama_model)
+            if self.settings.openai_compat_model:
+                allowed_models.add(self.settings.openai_compat_model)
 
         if model_name not in allowed_models:
             raise PolicyViolationError(

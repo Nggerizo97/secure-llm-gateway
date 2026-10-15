@@ -118,7 +118,7 @@ class GatewayRouter:
 
         except GatewayError as primary_err:
             primary_err.request_id = request_id
-            if not primary_err.retryable or not fallback_name:
+            if not self._may_fall_back(primary_err) or not fallback_name:
                 latency_ms = round((time.perf_counter() - start) * 1000, 2)
                 self.audit.record(
                     AuditEvent(
@@ -186,6 +186,12 @@ class GatewayRouter:
                     )
                 )
                 raise
+
+    def _may_fall_back(self, err: GatewayError) -> bool:
+        if err.retryable:
+            return True
+        # Budget exhaustion needs an explicitly approved alternative budget (plan section 10)
+        return err.category == "quota_exhausted" and self.settings.fallback_on_quota_exhausted
 
     def _get_provider(self, name: str) -> LLMProvider:
         if name not in self.providers:

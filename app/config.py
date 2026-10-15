@@ -1,6 +1,6 @@
 import os
 from typing import Literal, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 
 ProfileType = Literal["mock", "local", "enterprise"]
 
@@ -27,6 +27,19 @@ class Settings(BaseModel):
     fallback_provider: Optional[str] = Field(default="")
     # None -> enabled for mock/local, disabled for enterprise
     allow_simulation: Optional[bool] = Field(default=None)
+    # Budget exhaustion (402 / 429 insufficient_quota) only falls back when an alternative
+    # budget has been approved for the fallback route.
+    fallback_on_quota_exhausted: bool = Field(default=False)
+
+    # Remote self-hosted model (Ollama behind a token-checking proxy)
+    ollama_api_key: Optional[SecretStr] = Field(default=None)
+    ollama_ca_bundle: Optional[str] = Field(default=None)
+    ollama_allow_plaintext_tunnel: bool = Field(default=False)
+
+    # External OpenAI-compatible API
+    openai_compat_base_url: str = Field(default="")
+    openai_compat_api_key: Optional[SecretStr] = Field(default=None)
+    openai_compat_model: str = Field(default="")
 
     @model_validator(mode="after")
     def _apply_profile_defaults(self) -> "Settings":
@@ -62,4 +75,11 @@ class Settings(BaseModel):
             primary_provider=os.getenv("PRIMARY_PROVIDER", ""),
             fallback_provider=os.getenv("FALLBACK_PROVIDER", ""),
             allow_simulation=None if raw_simulation is None else raw_simulation.lower() == "true",
+            fallback_on_quota_exhausted=os.getenv("FALLBACK_ON_QUOTA_EXHAUSTED", "false").lower() == "true",
+            ollama_api_key=os.getenv("OLLAMA_API_KEY") or None,
+            ollama_ca_bundle=os.getenv("OLLAMA_CA_BUNDLE") or None,
+            ollama_allow_plaintext_tunnel=os.getenv("OLLAMA_ALLOW_PLAINTEXT_TUNNEL", "false").lower() == "true",
+            openai_compat_base_url=os.getenv("OPENAI_COMPAT_BASE_URL", ""),
+            openai_compat_api_key=os.getenv("OPENAI_COMPAT_API_KEY") or None,
+            openai_compat_model=os.getenv("OPENAI_COMPAT_MODEL", ""),
         )
