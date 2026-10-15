@@ -55,15 +55,15 @@ Status: ✅ done and tested · 🟡 implemented, not yet run on the target machi
 | S5 | Audit log is metadata-only and insert-only | ✅ | `test_no_prompt_logging`, `test_request_ids_are_server_generated_and_audit_is_insert_only` |
 | S6 | Callers must authenticate to the gateway API | ⬜ | — |
 | S7 | Machine B: reverse proxy enforces the token and TLS and exposes only `POST /api/generate` over TCP; Ollama binds only to localhost behind it; no debug/prompt logging; the token is never written to Caddy's config autosave | ✅ | `verify.sh` 9/9 PASS on WSL (2026-10-15); `deploy/model-server/Caddyfile`, `setup.sh`, `start-proxy.sh` |
-| S8 | Machine B firewall accepts model traffic only from machine A; optional lockdown blocks all outbound connections | 🟡 | `deploy/model-server/firewall.sh secure` / `lockdown` |
+| S8 | Machine B firewall accepts model traffic only from machine A; optional lockdown blocks all outbound connections | ✅ | `firewall.sh secure` on WSL (2026-10-15): a listener on a non-allowed port (9999) was unreachable from Windows while 8443 stayed reachable and failover kept working. `firewall.sh lockdown`: WSL could not reach example.com, ollama.com or 1.1.1.1, DNS failed, and failover to the WSL model still worked |
 
 ### Evidence for reviewers
 
 | ID | Requirement | Status |
 |---|---|---|
 | E1 | Step-by-step two-machine demo guide | ✅ [two-machine-demo.md](two-machine-demo.md) |
-| E2 | Packet capture showing a canary from the prompt is absent from traffic to machine B (TLS) | 🟡 `evidence.sh` |
-| E3 | Canary search of every file changed on machine B and its system journal shows no prompts persisted | 🟡 `evidence.sh` |
+| E2 | Packet capture showing a canary from the prompt is absent from traffic to machine B (TLS) | ✅ `evidence.sh` on WSL (2026-10-15): 34 packets captured, canary absent |
+| E3 | Canary search of every file changed on machine B and its system journal shows no prompts persisted | ✅ `evidence.sh` on WSL (2026-10-15): the model received the canary (it quoted it in its reply), yet it was absent from all 6 changed files and the journal |
 | E4 | All tests run offline (no network, model server or real key) | ✅ |
 | E5 | Synthetic sample code only | ✅ |
 
@@ -86,5 +86,4 @@ OLLAMA_API_KEY=<proxy token; never committed>
 
 ## Next steps
 
-1. **Run [two-machine-demo.md](two-machine-demo.md) on WSL** to turn the 🟡 items into ✅ (setup needs your `sudo`).
-2. **R7, S6:** OpenAI-compatible endpoint with caller authentication, so real developer tools can use the gateway.
+1. **R7, S6:** OpenAI-compatible endpoint with caller authentication, so real developer tools can use the gateway.

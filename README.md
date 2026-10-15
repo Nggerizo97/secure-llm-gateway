@@ -114,3 +114,22 @@ data/           local audit DB / vector store / Floci state (ignored by Git)
 - [Architecture](docs/architecture.md)
 - [Threat model](docs/threat-model.md)
 - [Security review checklist](docs/security-review-checklist.md)
+
+ WINDOWS (machine A = "company laptop")                 WSL (machine B = "company model server")
+ ┌──────────────────────────────────────┐               ┌──────────────────────────────────────────┐
+ │                                      │               │  Firewall (ufw)                          │
+ │  You: python -m app.cli ask "..."    │               │   in: only Windows host → port 8443      │
+ │            │                         │               │   out: optional lockdown blocks all      │
+ │            ▼                         │               │            │                             │
+ │  ┌────────────────────────┐          │   HTTPS +     │            ▼                             │
+ │  │ GATEWAY                │  ────────┼── token ────► │  Caddy proxy  172.28.81.65:8443          │
+ │  │ 1. policy checks       │ (fallback│   (only on    │   - checks TLS + token                   │
+ │  │ 2. route to primary    │   only)  │    429)       │   - only allows POST /api/generate       │
+ │  │ 3. on 429 → fallback   │          │               │            │                             │
+ │  │ 4. audit (no prompts)  │          │               │            ▼                             │
+ │  └──────────┬─────────────┘          │               │  Ollama  127.0.0.1:11434 (loopback only) │
+ │             │ primary                │               │   model: qwen2.5-coder:1.5b (your GPU)   │
+ │             ▼                        │               │   no debug logs, no prompt storage       │
+ │  Mock company provider :8900         │               └──────────────────────────────────────────┘
+ │  (plays "company LLM", 60 tokens/min)│
+ └──────────────────────────────────────┘
