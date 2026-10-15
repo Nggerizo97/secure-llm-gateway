@@ -79,11 +79,16 @@ Copy `.env.example` to `.env` (ignored by Git) or set environment variables dire
 | `ENABLE_FLOCI` | `false` | `local` profile only; endpoint must be `localhost`/`127.0.0.1`. |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `qwen2.5-coder:7b` | `local` profile. |
 | `AUDIT_STORE` / `AUDIT_DB_PATH` | `sqlite` / `./data/audit.db` | `memory` keeps nothing on disk. |
+| `FALLBACK_ON_QUOTA_EXHAUSTED` | `false` | Fall back on 402 / 429 `insufficient_quota` only when an alternative budget is approved. |
+| `OPENAI_COMPAT_BASE_URL` / `_MODEL` / `_API_KEY` | unset | External OpenAI-compatible API (`openai_compat`, `local` profile). HTTPS only; the configured model is always used. |
+| `OLLAMA_API_KEY` / `OLLAMA_CA_BUNDLE` / `OLLAMA_ALLOW_PLAINTEXT_TUNNEL` | unset / unset / `false` | Remote Ollama: private or tunnel address only, token required, HTTPS unless the tunnel is confirmed. |
 
 ## Routing rules
 
 - **Fallback allowed:** HTTP 429 rate limit and HTTP 503 temporary unavailability — only to the configured fallback, and only if the profile allowlists it.
-- **Never rerouted:** 401/403 authentication, 402 quota/budget exhaustion, policy denials (provider, model, data class, secrets in prompt, RAG disabled, simulation disabled), and unknown errors.
+- **Never rerouted:** 401/403 authentication, other 4xx such as content-policy rejections, malformed provider responses, policy denials (provider, model, data class, secrets in prompt, RAG disabled, simulation disabled, endpoint denied), and unknown errors.
+- **Budget exhaustion** (402 / 429 `insufficient_quota`): not rerouted unless `FALLBACK_ON_QUOTA_EXHAUSTED=true`.
+- **Remote self-hosted models** must sit on a loopback, private or tunnel address, behind a token, over HTTPS (or a confirmed WireGuard/Tailscale tunnel). Public addresses are refused.
 - **Always denied:** `personal_api`.
 - At most one fallback attempt per request — no retry loops.
 
@@ -101,6 +106,7 @@ data/           local audit DB / vector store / Floci state (ignored by Git)
 
 ## Further reading
 
+- [Demo requirements and status](docs/requirements.md)
 - [Demo script](docs/demo-script.md)
 - [Architecture](docs/architecture.md)
 - [Threat model](docs/threat-model.md)

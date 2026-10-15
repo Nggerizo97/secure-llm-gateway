@@ -44,6 +44,35 @@ class PolicyViolationError(GatewayError):
         super().__init__(message, status_code=403, category=category, retryable=False)
 
 
+class BadProviderResponseError(GatewayError):
+    def __init__(self, message: str):
+        super().__init__(message, status_code=502, category="provider_bad_response", retryable=False)
+
+
+def classify_http_error(provider: str, status_code: int, body: str) -> GatewayError:
+    """Map an upstream HTTP error to a gateway error. Only capacity errors are retryable.
+
+    The upstream body is inspected but never copied into the message, since it may echo the prompt.
+    """
+    if status_code == 429:
+        if "insufficient_quota" in body:
+            return QuotaExhaustedError(f"{provider} returned HTTP 429 insufficient_quota (budget exhausted)")
+        return RateLimitError(f"{provider} returned HTTP 429 rate limit")
+    if status_code == 402:
+        return QuotaExhaustedError(f"{provider} returned HTTP 402 quota exhausted")
+    if status_code in (401, 403):
+        return AuthenticationError(f"{provider} returned HTTP {status_code}")
+    if status_code >= 500:
+        return ProviderUnavailableError(f"{provider} returned HTTP {status_code}")
+    # Other 4xx (bad request, unknown model, content policy) must never be rerouted elsewhere
+    return GatewayError(
+        f"{provider} rejected the request with HTTP {status_code}",
+        status_code=502,
+        category="provider_request_rejected",
+        retryable=False,
+    )
+
+
 class LLMProvider(Protocol):
     name: str
 

@@ -1,6 +1,7 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from pydantic import SecretStr
 from app.audit import AuditLogger
 from app.config import Settings
 from app.policy import ALLOWED_MODELS_BY_PROFILE, ALLOWED_PROVIDERS_BY_PROFILE, PolicyEngine
@@ -8,8 +9,13 @@ from app.providers.base import GatewayError
 from app.providers.enterprise import EnterpriseProvider
 from app.providers.mock import MockProvider
 from app.providers.ollama import OllamaProvider
+from app.providers.openai_compat import OpenAICompatibleProvider
 from app.router import GatewayRouter
 from app.schemas import AuditEvent, LLMRequest, LLMResponse
+
+
+def _secret(value: Optional[SecretStr]) -> Optional[str]:
+    return value.get_secret_value() if value is not None else None
 
 
 def build_router(settings: Settings | None = None) -> GatewayRouter:
@@ -31,6 +37,14 @@ def build_router(settings: Settings | None = None) -> GatewayRouter:
         "ollama": OllamaProvider(
             base_url=cfg.ollama_base_url,
             default_model=cfg.ollama_model,
+            api_key=_secret(cfg.ollama_api_key),
+            ca_bundle=cfg.ollama_ca_bundle,
+            allow_plaintext_tunnel=cfg.ollama_allow_plaintext_tunnel,
+        ),
+        "openai_compat": OpenAICompatibleProvider(
+            base_url=cfg.openai_compat_base_url,
+            api_key=_secret(cfg.openai_compat_api_key),
+            model=cfg.openai_compat_model,
         ),
         "enterprise": EnterpriseProvider(),
     }
@@ -73,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "enable_rag": cfg.enable_rag,
             "route": {"primary": cfg.primary_provider, "fallback": cfg.fallback_provider},
             "simulation_enabled": cfg.allow_simulation,
+            "fallback_on_quota_exhausted": cfg.fallback_on_quota_exhausted,
             "allowed_providers": sorted(
                 ALLOWED_PROVIDERS_BY_PROFILE.get(cfg.app_profile, set())
             ),
